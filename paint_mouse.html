@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js vr - paint</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+		<link type="text/css" rel="stylesheet" href="main.css">
+	</head>
+	<body>
+
+		<div id="info">
+			<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> vr - paint
+		</div>
+
+		<script src="threejs/examples/js/vr/HelioWebXRPolyfill.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.js"></script>
+
+		<script type="module">
+
+			import * as THREE from './threejs/build/three.module.js';
+			import { OrbitControls } from './threejs/examples/jsm/controls/OrbitControls.js';
+
+			import { TubePainter } from './threejs/examples/jsm/misc/TubePainter.js';
+			import { VRButton } from './threejs/examples/jsm/webxr/VRButton.js';
+
+			var container;
+			var painter1;
+			var camera, scene, renderer, clicked;
+			var controller1, controller2;
+			var countM=0;
+
+			//var posz= 2;
+
+			var meshList =[];
+
+			var cursor = new THREE.Vector3();
+
+			// Options to be added to the GUI
+
+			var options = {
+				  grosor: 1,
+				  posz: 2,
+				  color: '#ffffff'
+				  
+			};
+
+			var controls;
+
+			init();
+			initGUI();
+			animate();
+
+			function init() {
+
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				scene = new THREE.Scene();
+				scene.background = new THREE.Color( 0x222222 );
+
+				camera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.01, 50 );
+				camera.position.set( 0, 1.6, 3 );
+
+				/*controls = new OrbitControls( camera, container );
+				controls.target.set( 0, 1.6, 0 );
+				controls.update();*/
+
+				var geometry = new THREE.BoxBufferGeometry( 0.5, 0.8, 0.5 );
+				var material = new THREE.MeshStandardMaterial( {
+					color: 0x444444,
+					roughness: 1.0,
+					metalness: 0.0
+				} );
+				var table = new THREE.Mesh( geometry, material );
+				table.position.y = 0.35;
+				table.position.z = 0.85;
+				scene.add( table );
+
+				var geometry = new THREE.PlaneBufferGeometry( 4, 4 );
+				var material = new THREE.MeshStandardMaterial( {
+					color: 0x222222,
+					roughness: 1.0,
+					metalness: 0.0
+				} );
+				var floor = new THREE.Mesh( geometry, material );
+				floor.rotation.x = - Math.PI / 2;
+				scene.add( floor );
+
+				var grid = new THREE.GridHelper( 10, 20, 0x111111, 0x111111 );
+				// grid.material.depthTest = false; // avoid z-fighting
+				scene.add( grid );
+
+				scene.add( new THREE.HemisphereLight( 0x888877, 0x777788 ) );
+
+				var light = new THREE.DirectionalLight( 0xffffff, 0.5 );
+				light.position.set( 0, 4, 0 );
+				scene.add( light );
+
+				//
+
+				painter1 = new TubePainter();
+
+				painter1.mesh.name=countM;
+				countM++;
+
+				scene.add( painter1.mesh );
+
+				
+				
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.outputEncoding = THREE.sRGBEncoding;
+				//renderer.xr.enabled = true;
+				container.appendChild( renderer.domElement );
+
+				//document.body.appendChild( VRButton.createButton( renderer ) );
+
+				//
+				//
+
+				window.addEventListener( 'resize', onWindowResize, false );
+
+				window.addEventListener("mousemove", onMouseMove, false );
+            	window.addEventListener("mousedown", onMouseDown, false );
+           	 	window.addEventListener("mouseup", onMouseUp, false );
+
+			}
+
+
+
+
+			function initGUI() {
+				var gui = new dat.GUI();
+				var opt = gui.addFolder('Options');
+				var obj = { borrar:function(){ 
+					meshList.pop(); // Borrar Mesh vacio (Error al presionar en la funcion borrar en el Gui)
+					var meshLast= meshList.pop(); // Borrar Mesh
+					
+					scene.remove( meshLast );
+
+			
+				}};
+
+				opt.addColor(options, 'color').listen();
+				opt.add(options, 'grosor',0.1, 10).step(0.1).listen();
+				opt.add(options, 'posz', -10, 2).step(0.1).listen();;
+				opt.add(obj,'borrar');
+				opt.open();
+
+			}
+
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			//
+			
+
+
+			function onMouseMove(e){
+				// Move and project on the plane
+
+				painter1.setSize( options.grosor);
+				painter1.mesh.material.color.set(options.color);
+
+				var vect= new THREE.Vector3();
+				vect.x = ( e.clientX / renderer.domElement.clientWidth ) * 2 - 1;
+				vect.y = - ( e.clientY / renderer.domElement.clientHeight ) * 2 + 1;
+				vect.z = options.posz;
+
+				vect.x=  camera.position.x + vect.x ;
+				vect.y = camera.position.y + vect.y/2;
+
+				if(clicked){
+					
+					painter1.lineTo( vect);
+					painter1.update();
+
+				}else{
+
+					painter1.moveTo( vect );
+
+				}
+
+
+
+				
+			}
+
+			function onMouseDown(e){
+				clicked = true;
+				
+				
+			}
+
+			function onMouseUp(e){
+				
+				if(clicked){
+					meshList.push(painter1.mesh);
+					painter1 = new TubePainter();
+					painter1.mesh.name=countM;
+					countM++;
+					scene.add( painter1.mesh );
+
+
+				}
+				
+				clicked = false;
+
+
+				
+			}
+
+
+
+
+
+			function animate() {
+
+				renderer.setAnimationLoop( render );
+
+			}
+
+			function render() {
+
+
+				renderer.render( scene, camera );
+
+			}
+
+		</script>
+	</body>
+</html>
